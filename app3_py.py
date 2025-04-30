@@ -4,6 +4,7 @@ import pandas as pd
 import pickle
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
+import tempfile
 import os
 
 # ======================
@@ -19,17 +20,30 @@ except Exception as e:
     st.error(f"Initialization error: {e}")
 
 # ======================
+# UPLOAD SECTION
+# ======================
+st.sidebar.header("Upload Required Files")
+model_file = st.sidebar.file_uploader("Upload Keras Model (.keras)", type=["keras"])
+tokenizer_file = st.sidebar.file_uploader("Upload Tokenizer (.pkl)", type=["pkl"])
+
+# ======================
 # MODEL & TOKENIZER LOADING
 # ======================
 @st.cache_resource
-def load_model_and_tokenizer():
+def load_model_and_tokenizer(model_file, tokenizer_file):
     try:
-        if not os.path.exists("sentiment_lstm_model.keras") or not os.path.exists("tokenizer.pkl"):
-            raise FileNotFoundError("Model or Tokenizer not found. Please upload the required files.")
+        # Save uploaded files to temporary directory
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".keras") as tmp_model:
+            tmp_model.write(model_file.read())
+            model_path = tmp_model.name
 
-        model = load_model("sentiment_lstm_model.keras")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pkl") as tmp_token:
+            tmp_token.write(tokenizer_file.read())
+            token_path = tmp_token.name
 
-        with open('tokenizer.pkl', 'rb') as f:
+        model = load_model(model_path)
+
+        with open(token_path, 'rb') as f:
             tokenizer = pickle.load(f)
 
         return model, tokenizer
@@ -79,9 +93,11 @@ user_input = st.text_area("Review Text:", height=150)
 if st.button("Analyze Sentiment", type="primary"):
     if not user_input.strip():
         st.warning("⚠️ Please enter a review first.")
+    elif not model_file or not tokenizer_file:
+        st.warning("⚠️ Please upload both the model and tokenizer files in the sidebar.")
     else:
         with st.spinner("Processing..."):
-            model, tokenizer = load_model_and_tokenizer()
+            model, tokenizer = load_model_and_tokenizer(model_file, tokenizer_file)
 
             if model is not None and tokenizer is not None:
                 results = predict_sentiment(model, tokenizer, user_input)
@@ -122,7 +138,7 @@ with st.expander("⚠️ Troubleshooting Help"):
     **Common Issues & Solutions:**
 
     1. **Model or Tokenizer not found**:
-       - Ensure `sentiment_lstm_model.keras` and `tokenizer.pkl` are in the app folder.
+       - Upload `sentiment_lstm_model.keras` and `tokenizer.pkl` using the sidebar.
        - Refresh the page after uploading.
 
     2. **Strange predictions**:
