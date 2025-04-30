@@ -11,6 +11,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Embedding, LSTM, Dense
 import joblib
+import os
 
 # App Title
 st.title("☕ Coffee Review Sentiment Classifier (LSTM)")
@@ -58,17 +59,46 @@ if uploaded_file:
     train_labels = np.array(train_labels)
     test_labels = np.array(test_labels)
 
-    # Define Model
-    model = Sequential([
-        Embedding(input_dim=vocab_size, output_dim=128, input_length=max_len),
-        LSTM(128),
-        Dense(3, activation='softmax')
-    ])
+    # Try to load existing model
+    model = None
+    if os.path.exists("sentiment_lstm_model.keras") and os.path.exists("tokenizer.pkl"):
+        model = tf.keras.models.load_model("sentiment_lstm_model.keras")
+        tokenizer = joblib.load("tokenizer.pkl")
+        st.success("✅ Pre-trained model and tokenizer loaded.")
 
-    model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    else:
+        # Define Model (will train if user clicks button)
+        model = Sequential([
+            Embedding(input_dim=vocab_size, output_dim=128, input_length=max_len),
+            LSTM(128),
+            Dense(3, activation='softmax')
+        ])
 
+        model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+    # Training section
     st.header("2. Train Model")
     if st.button("Start Training"):
         with st.spinner("Training in progress..."):
             history = model.fit(train_padded, train_labels, epochs=5, batch_size=16,
                                 validation_data=(test_padded, test_labels), verbose=0)
+            model.save("sentiment_lstm_model.keras")
+            joblib.dump(tokenizer, 'tokenizer.pkl')
+            st.success("✅ Training complete and model saved!")
+
+    # Evaluation
+    if model:
+        st.header("3. Evaluate Model")
+        preds = model.predict(test_padded)
+        preds = np.argmax(preds, axis=1)
+
+        report = classification_report(test_labels, preds, target_names=["Negative", "Neutral", "Positive"], output_dict=True)
+        st.write("📊 Classification Report", pd.DataFrame(report).transpose())
+
+        cm = confusion_matrix(test_labels, preds)
+        fig, ax = plt.subplots()
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=["Neg", "Neu", "Pos"], yticklabels=["Neg", "Neu", "Pos"], ax=ax)
+        ax.set_xlabel("Predicted")
+        ax.set_ylabel("True")
+        ax.set_title("Confusion Matrix")
+        st.pyplot(fig)
