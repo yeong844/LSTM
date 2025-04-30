@@ -151,13 +151,6 @@ Sentiment Categories:
 - 😊 Positive
 """)
 
-st.sidebar.subheader("Model Details")
-st.sidebar.markdown("""
-- **Model**: Bidirectional LSTM
-- **Tokenizer**: Trained with same dataset
-- **Input**: Any review or feedback
-""")
-
 st.sidebar.subheader("Tips for Better Results")
 st.sidebar.markdown("""
 1. Use complete sentences.
