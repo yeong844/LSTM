@@ -24,10 +24,10 @@ MAX_LEN = 100
 # ======================
 # MODEL & TOKENIZER LOADING
 # ======================
-@st.cache_resource  # Use caching to avoid reloading on every rerun
+@st.cache_resource
 def load_model_and_tokenizer():
     try:
-        model = load_model("sentiment_lstm_model.keras", compile=True)  # Ensure model is compiled
+        model = load_model("sentiment_lstm_model.keras", compile=True)
         tokenizer = joblib.load("tokenizer.pkl")
         return model, tokenizer
     except Exception as e:
@@ -35,106 +35,36 @@ def load_model_and_tokenizer():
         return None, None
 
 # ======================
-# PREDICTION FUNCTION
+# PREDICTION FUNCTION (Simplified)
 # ======================
 def clean_text(text):
-    # Match exact preprocessing from training
     text = text.lower()
     text = re.sub(r'[^\w\s]', '', text)
     return text
 
 def predict_sentiment(model, tokenizer, review):
-    # Clean and preprocess the review
     cleaned_review = clean_text(review)
-    
-    # Convert to sequence and pad
     sequence = tokenizer.texts_to_sequences([cleaned_review])
     padded = pad_sequences(sequence, maxlen=MAX_LEN, padding='post', truncating='post')
-    
-    # Make prediction
-    prediction = model.predict(padded, verbose=0)
-    
-    # Define sentiment keywords
-    negative_keywords = ['terrible', 'awful', 'bad', 'worst', 'horrible', 'disgusting', 
-                        'bitter', 'burnt', 'hate', 'nasty', 'undrinkable', 'disappointed']
-    
-    neutral_keywords = ['okay', 'ok', 'average', 'decent', 'mediocre', 'moderate', 
-                       'fair', 'middle', 'ordinary', 'standard', 'acceptable', 'alright',
-                       'not bad', 'not great']
-    
-    positive_keywords = ['excellent', 'amazing', 'love', 'delicious', 'great', 'best', 
-                         'fantastic', 'wonderful', 'perfect', 'awesome', 'superb', 'outstanding']
-    
-    # Check for presence of sentiment keywords
-    has_negative = any(word in cleaned_review for word in negative_keywords)
-    has_neutral = any(word in cleaned_review for word in neutral_keywords) or ('not bad' in cleaned_review and 'not great' in cleaned_review)
-    has_positive = any(word in cleaned_review for word in positive_keywords)
-    
-    # Count keyword matches
-    negative_count = sum(1 for word in negative_keywords if word in cleaned_review)
-    neutral_count = sum(1 for word in neutral_keywords if word in cleaned_review)
-    positive_count = sum(1 for word in positive_keywords if word in cleaned_review)
-    
-    # Override probabilities if clear keywords are present and prediction contradicts
-    original_prediction = prediction[0].copy()
-    original_class = np.argmax(original_prediction)
-    corrected = False
-    
-    # Define thresholds for correction
-    confidence_threshold = 0.6
-    
-    # Handle neutral cases specifically
-    if has_neutral and not (has_positive or has_negative) and original_class != 1:
-        # Enhance neutral probability and reduce others
-        prediction[0][1] = max(prediction[0][1], confidence_threshold)  # Boost neutral
-        prediction[0][0] = min(prediction[0][0], (1 - prediction[0][1]) / 2)  # Reduce negative
-        prediction[0][2] = min(prediction[0][2], (1 - prediction[0][1]) / 2)  # Reduce positive
-        corrected = True
-    
-    # Mixed sentiment with more neutral keywords than others
-    elif neutral_count > positive_count and neutral_count > negative_count and original_class != 1:
-        prediction[0][1] = max(prediction[0][1], confidence_threshold)  # Boost neutral
-        prediction[0][0] = min(prediction[0][0], (1 - prediction[0][1]) / 2)  # Reduce negative
-        prediction[0][2] = min(prediction[0][2], (1 - prediction[0][1]) / 2)  # Reduce positive
-        corrected = True
-    
-    # If clear negative keywords but predicted positive
-    elif has_negative and not has_positive and original_class == 2:
-        # Swap probabilities (negative and positive)
-        prediction[0][0] = max(original_prediction[2], confidence_threshold)  # Set negative high
-        prediction[0][2] = min(original_prediction[0], (1 - prediction[0][0] - prediction[0][1]))  # Reduce positive
-        corrected = True
-    
-    # If clear positive keywords but predicted negative
-    elif has_positive and not has_negative and original_class == 0:
-        # Swap probabilities (negative and positive)
-        prediction[0][2] = max(original_prediction[0], confidence_threshold)  # Set positive high
-        prediction[0][0] = min(original_prediction[2], (1 - prediction[0][1] - prediction[0][2]))  # Reduce negative
-        corrected = True
-    
-    # Normalize probabilities to sum to 1
-    prediction[0] = prediction[0] / np.sum(prediction[0])
-    
-    # Get the predicted class after possible correction
-    label = np.argmax(prediction[0])
-    
-    # Map the prediction to sentiment
+    prediction = model.predict(padded, verbose=0)[0]
+    label = np.argmax(prediction)
+
     sentiment_map = {
         0: ("Negative", "😠", "red"),
         1: ("Neutral", "😐", "blue"),
         2: ("Positive", "😊", "green")
     }
-    
+
     sentiment, emoji, color = sentiment_map[label]
-    
+
     return {
         "sentiment": sentiment,
         "emoji": emoji,
         "color": color,
-        "probabilities": prediction[0],
-        "confidence": float(np.max(prediction[0])),
-        "corrected": corrected,
-        "original_prediction": original_prediction if corrected else None
+        "probabilities": prediction,
+        "confidence": float(np.max(prediction)),
+        "corrected": False,
+        "original_prediction": None
     }
 
 # ======================
@@ -143,7 +73,6 @@ def predict_sentiment(model, tokenizer, review):
 st.title("Sentiment Analyzer")
 st.write("Analyze the sentiment of any text review using a Bidirectional LSTM model.")
 
-# Check model files
 file_status = st.empty()
 model_exists = os.path.exists("sentiment_lstm_model.keras")
 tokenizer_exists = os.path.exists("tokenizer.pkl")
@@ -162,19 +91,17 @@ if not model_exists or not tokenizer_exists:
     """)
 else:
     file_status.success("✅ Model and tokenizer files found")
-    # Only load model if files exist
     model, tokenizer = load_model_and_tokenizer()
 
-# User input section
+# Input section
 st.header("Enter a Review")
 user_input = st.text_area(
-    "Review Text:", 
-    height=150, 
-    value="",  # Start with empty input
-    placeholder="Example: This product was decent but not impressive. Could have been better."
+    "Review Text:",
+    height=150,
+    value="",
+    placeholder="Example: The product quality was great and delivery was fast!"
 )
 
-# Analysis button
 analyze_button = st.button("Analyze Sentiment", type="primary")
 
 if analyze_button:
@@ -184,49 +111,28 @@ if analyze_button:
         st.error("Cannot analyze: Model or tokenizer could not be loaded.")
     else:
         with st.spinner("Analyzing..."):
-            # The actual prediction
             results = predict_sentiment(model, tokenizer, user_input)
-            
+
             sentiment = results["sentiment"]
             emoji = results["emoji"]
             color = results["color"]
             probabilities = results["probabilities"]
             confidence = results["confidence"]
-            corrected = results["corrected"]
-            
-            # Show main result
+
             st.markdown(
                 f"### <span style='color:{color}; font-size: 28px;'>{emoji} {sentiment}</span>",
                 unsafe_allow_html=True
             )
-            
-            # Show correction notice if applicable
-            if corrected:
-                st.warning("⚠️ Prediction was adjusted based on sentiment keywords in text.")
-                st.write("The model prediction appeared to contradict clear sentiment indicators in your text.")
-            
-            # Show confidence bar
+
             st.progress(confidence)
             st.caption(f"Confidence: {confidence:.1%}")
-            
-            # Show detailed breakdown
+
             st.subheader("Sentiment Breakdown")
             cols = st.columns(3)
             cols[0].metric("Negative", f"{probabilities[0]:.1%}")
             cols[1].metric("Neutral", f"{probabilities[1]:.1%}")
             cols[2].metric("Positive", f"{probabilities[2]:.1%}")
-            
-            # If corrected, show original prediction
-            if corrected and results["original_prediction"] is not None:
-                with st.expander("Original Model Prediction"):
-                    orig_pred = results["original_prediction"]
-                    st.write("This was the model's original prediction before adjustment:")
-                    orig_cols = st.columns(3)
-                    orig_cols[0].metric("Negative", f"{orig_pred[0]:.1%}")
-                    orig_cols[1].metric("Neutral", f"{orig_pred[1]:.1%}")
-                    orig_cols[2].metric("Positive", f"{orig_pred[2]:.1%}")
-            
-            # Show the processed text
+
             with st.expander("Preprocessing Details"):
                 st.write("**Original Text:**")
                 st.write(user_input)
@@ -239,32 +145,22 @@ if analyze_button:
 st.sidebar.title("About")
 st.sidebar.info("""
 This app uses a Bidirectional LSTM model trained to classify sentiment for any text input.
-The model categorizes reviews as:
-- 😠 **Negative**
-- 😐 **Neutral**
-- 😊 **Positive**
+Sentiment Categories:
+- 😠 Negative
+- 😐 Neutral
+- 😊 Positive
 """)
 
-st.sidebar.subheader("Model Information")
+st.sidebar.subheader("Model Details")
 st.sidebar.markdown("""
-- **Architecture**: Bidirectional LSTM
-- **Training Data**: Text data with sentiment labels
-- **Features**: Text processing with NLP
-- **Target**: Sentiment classification (3 classes)
-""")
-
-st.sidebar.subheader("📢 Important Notice")
-st.sidebar.warning("""
-**The model is currently being improved for better accuracy.**
-
-This version includes fixes to better identify all sentiment types, 
-including neutral reviews. A fully retrained model will be 
-released soon.
+- **Model**: Bidirectional LSTM
+- **Tokenizer**: Trained with same dataset
+- **Input**: Any review or feedback
 """)
 
 st.sidebar.subheader("Tips for Better Results")
 st.sidebar.markdown("""
-1. **Be descriptive** - Include details about your experience, features, etc.
-2. **Use specific terms** - Words that describe performance, quality, etc.
-3. **Be clear** - Avoid overly ambiguous or vague language.
+1. Use complete sentences.
+2. Mention what you liked or disliked.
+3. Avoid vague language.
 """)
