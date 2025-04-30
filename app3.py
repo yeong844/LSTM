@@ -11,7 +11,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 # STREAMLIT PAGE SETUP
 # ======================
 st.set_page_config(
-    page_title="Coffee Review Sentiment Analyzer",
+    page_title="Sentiment Analyzer",
     layout="centered",
     initial_sidebar_state="expanded"
 )
@@ -140,8 +140,8 @@ def predict_sentiment(model, tokenizer, review):
 # ======================
 # MAIN INTERFACE
 # ======================
-st.title("☕ Coffee Review Sentiment Analyzer")
-st.write("Analyze the sentiment of coffee reviews using a Bidirectional LSTM model.")
+st.title("Sentiment Analyzer")
+st.write("Analyze the sentiment of any text review using a Bidirectional LSTM model.")
 
 # Check model files
 file_status = st.empty()
@@ -166,36 +166,16 @@ else:
     model, tokenizer = load_model_and_tokenizer()
 
 # User input section
-st.header("Enter a Coffee Review")
+st.header("Enter a Review")
 user_input = st.text_area(
     "Review Text:", 
     height=150, 
     value="",  # Start with empty input
-    placeholder="Example: This coffee has amazing flavor with hints of chocolate and a smooth finish."
+    placeholder="Example: This product was decent but not impressive. Could have been better."
 )
-
-# Example section
-with st.expander("Try example reviews"):
-    examples = {
-        "Positive": "This coffee is amazing! Rich flavor with hints of chocolate. Best I've ever had!",
-        "Neutral": "The coffee is okay. Not the best, not the worst. It's drinkable but nothing special.",
-        "Negative": "Terrible coffee! Tastes burnt and bitter. I couldn't even finish my cup."
-    }
-    
-    cols = st.columns(3)
-    for i, (sentiment, example) in enumerate(examples.items()):
-        if cols[i].button(f"{sentiment} Example"):
-            user_input = example
-            st.session_state.user_input = example
 
 # Analysis button
 analyze_button = st.button("Analyze Sentiment", type="primary")
-
-# Handle session state for examples
-if 'user_input' in st.session_state:
-    user_input = st.session_state.user_input
-    del st.session_state.user_input
-    analyze_button = True
 
 if analyze_button:
     if not user_input.strip():
@@ -258,18 +238,18 @@ if analyze_button:
 # ======================
 st.sidebar.title("About")
 st.sidebar.info("""
-This app uses a Bidirectional LSTM model trained on coffee review data to classify sentiment.
+This app uses a Bidirectional LSTM model trained to classify sentiment for any text input.
 The model categorizes reviews as:
-- 😠 **Negative** (1-2 stars)
-- 😐 **Neutral** (3 stars)
-- 😊 **Positive** (4-5 stars)
+- 😠 **Negative**
+- 😐 **Neutral**
+- 😊 **Positive**
 """)
 
 st.sidebar.subheader("Model Information")
 st.sidebar.markdown("""
 - **Architecture**: Bidirectional LSTM
-- **Training Data**: Coffee reviews with star ratings
-- **Features**: Text reviews processed with NLP
+- **Training Data**: Text data with sentiment labels
+- **Features**: Text processing with NLP
 - **Target**: Sentiment classification (3 classes)
 """)
 
@@ -284,7 +264,7 @@ released soon.
 
 st.sidebar.subheader("Tips for Better Results")
 st.sidebar.markdown("""
-1. **Be descriptive** - Include details about flavor, aroma, etc.
-2. **Use coffee terminology** - Words like "acidic," "bitter," or "smooth"
-3. **Be clear** - Avoid ambiguous language
+1. **Be descriptive** - Include details about your experience, features, etc.
+2. **Use specific terms** - Words that describe performance, quality, etc.
+3. **Be clear** - Avoid overly ambiguous or vague language.
 """)
