@@ -3,3 +3,6 @@ tensorflow==2.12.0
 numpy
 pandas
 scikit-learn
+matplotlib
+seaborn
+joblib
