@@ -1,8 +1,8 @@
 streamlit
-tensorflow
-scikit-learn
-seaborn
-matplotlib
 pandas
 numpy
+matplotlib
+seaborn
+scikit-learn
+tensorflow
 joblib
