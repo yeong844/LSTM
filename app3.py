@@ -23,9 +23,8 @@ MAX_LEN = 100
 VOCAB_SIZE = 10000
 
 # ======================
-# LOAD MODEL & TOKENIZER
+# LOAD MODEL & TOKENIZER (No Caching)
 # ======================
-@st.cache_resource
 def load_model_and_tokenizer():
     try:
         model = load_model("sentiment_lstm_model.keras")
@@ -35,12 +34,10 @@ def load_model_and_tokenizer():
         st.error(f"Failed to load model or tokenizer: {e}")
         return None, None
 
-model, tokenizer = load_model_and_tokenizer()
-
 # ======================
 # PREDICTION FUNCTION
 # ======================
-def predict_sentiment(review):
+def predict_sentiment(model, tokenizer, review):
     try:
         sequence = tokenizer.texts_to_sequences([review])
         padded = pad_sequences(sequence, maxlen=MAX_LEN, padding='post')
@@ -76,27 +73,29 @@ if st.button("Analyze Sentiment", type="primary"):
         st.warning("⚠️ Please enter a review first.")
     else:
         with st.spinner("Analyzing..."):
-            results = predict_sentiment(user_input)
+            model, tokenizer = load_model_and_tokenizer()
+            if model is not None and tokenizer is not None:
+                results = predict_sentiment(model, tokenizer, user_input)
 
-            if results:
-                sentiment = results["sentiment"]
-                emoji = results["emoji"]
-                color = results["color"]
-                probabilities = results["probabilities"]
+                if results:
+                    sentiment = results["sentiment"]
+                    emoji = results["emoji"]
+                    color = results["color"]
+                    probabilities = results["probabilities"]
 
-                st.markdown(
-                    f"### <span style='color:{color}'>{emoji} {sentiment}</span>",
-                    unsafe_allow_html=True
-                )
+                    st.markdown(
+                        f"### <span style='color:{color}'>{emoji} {sentiment}</span>",
+                        unsafe_allow_html=True
+                    )
 
-                st.progress(int(np.max(probabilities) * 100))
-                st.caption(f"Confidence: {np.max(probabilities):.1%}")
+                    st.progress(int(np.max(probabilities) * 100))
+                    st.caption(f"Confidence: {np.max(probabilities):.1%}")
 
-                with st.expander("Detailed Prediction"):
-                    cols = st.columns(3)
-                    cols[0].metric("Positive", f"{probabilities[2]:.1%}")
-                    cols[1].metric("Neutral", f"{probabilities[1]:.1%}")
-                    cols[2].metric("Negative", f"{probabilities[0]:.1%}")
+                    with st.expander("Detailed Prediction"):
+                        cols = st.columns(3)
+                        cols[0].metric("Positive", f"{probabilities[2]:.1%}")
+                        cols[1].metric("Neutral", f"{probabilities[1]:.1%}")
+                        cols[2].metric("Negative", f"{probabilities[0]:.1%}")
 
 # ======================
 # SIDEBAR NOTICE
