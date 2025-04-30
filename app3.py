@@ -1,63 +1,34 @@
 import streamlit as st
 import numpy as np
-import re
 import joblib
+import re
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-# ======================
-# CONSTANTS
-# ======================
-MAX_LEN = 100
-VOCAB_SIZE = 10000
+# Load the trained model and tokenizer
+model = load_model('sentiment_lstm_model.keras')
+tokenizer = joblib.load('tokenizer.pkl')
 
-# ======================
-# CLEANING FUNCTION
-# ======================
+# Define cleaning function
 def clean_text(text):
-    text = text.lower()  # Convert text to lowercase
-    text = re.sub(r"[^\w\s]", "", text)  # Remove punctuation
+    text = text.lower()
+    text = re.sub(r"[^\w\s]", "", text)
     return text
 
-# ======================
-# LOAD MODEL AND TOKENIZER
-# ======================
-def load_model_and_tokenizer():
-    try:
-        model = load_model("sentiment_lstm_model.keras")
-        tokenizer = joblib.load("tokenizer.pkl")
-        return model, tokenizer
-    except Exception as e:
-        st.error(f"Failed to load model or tokenizer: {e}")
-        return None, None
-
-# ======================
-# PREDICTION FUNCTION
-# ======================
+# Define prediction function
 def predict_sentiment(model, tokenizer, review):
     try:
-        # Clean the review text
-        review = clean_text(review)
-
-        # Convert the review text to sequence of integers
+        review = clean_text(review)  # Ensure same preprocessing
         sequence = tokenizer.texts_to_sequences([review])
-        padded = pad_sequences(sequence, maxlen=MAX_LEN, padding='post')
-
-        # Predict sentiment
+        padded = pad_sequences(sequence, maxlen=100, padding='post')
         prediction = model.predict(padded, verbose=0)
-        
-        # Get the predicted class
         label = np.argmax(prediction)
-        
-        # Map label to sentiment
         sentiment_map = {
             0: ("Negative", "😠", "red"),
             1: ("Neutral", "😐", "blue"),
             2: ("Positive", "😊", "green")
         }
-
         sentiment, emoji, color = sentiment_map[label]
-        
         return {
             "sentiment": sentiment,
             "emoji": emoji,
@@ -68,61 +39,24 @@ def predict_sentiment(model, tokenizer, review):
         st.error(f"Prediction error: {e}")
         return None
 
-# ======================
-# STREAMLIT PAGE SETUP
-# ======================
-try:
-    st.set_page_config(
-        page_title="Coffee Review Sentiment (LSTM)",
-        layout="centered",
-        initial_sidebar_state="expanded"
-    )
-except Exception as e:
-    st.error(f"Page configuration error: {e}")
+# Streamlit interface
+st.title('Sentiment Analysis App')
 
-# ======================
-# MAIN INTERFACE
-# ======================
-st.title("☕ Coffee Review Sentiment Classifier (LSTM)")
-st.write("Analyze the sentiment of a coffee review using a pre-trained LSTM model.")
+st.write("Enter a review to analyze its sentiment:")
 
-st.header("Enter a Coffee Review")
-user_input = st.text_area("Review Text:", height=150)
+# Input from user
+user_review = st.text_area("Review", "")
 
-if st.button("Analyze Sentiment", type="primary"):
-    if not user_input.strip():
-        st.warning("⚠️ Please enter a review first.")
-    else:
-        with st.spinner("Analyzing..."):
-            model, tokenizer = load_model_and_tokenizer()
-            if model is not None and tokenizer is not None:
-                results = predict_sentiment(model, tokenizer, user_input)
-
-                if results:
-                    sentiment = results["sentiment"]
-                    emoji = results["emoji"]
-                    color = results["color"]
-                    probabilities = results["probabilities"]
-
-                    st.markdown(
-                        f"### <span style='color:{color}'>{emoji} {sentiment}</span>",
-                        unsafe_allow_html=True
-                    )
-
-                    st.progress(int(np.max(probabilities) * 100))
-                    st.caption(f"Confidence: {np.max(probabilities):.1%}")
-
-                    with st.expander("Detailed Prediction"):
-                        cols = st.columns(3)
-                        cols[0].metric("Positive", f"{probabilities[2]:.1%}")
-                        cols[1].metric("Neutral", f"{probabilities[1]:.1%}")
-                        cols[2].metric("Negative", f"{probabilities[0]:.1%}")
-
-# ======================
-# SIDEBAR NOTICE
-# ======================
-st.sidebar.warning("""
-⚠️ **Security Warning**  
-This app loads models and tokenizers from files that may execute arbitrary code.  
-Only use trusted model/tokenizer files.
-""")
+if user_review:
+    # Predict sentiment
+    result = predict_sentiment(model, tokenizer, user_review)
+    
+    if result:
+        sentiment = result['sentiment']
+        emoji = result['emoji']
+        color = result['color']
+        probabilities = result['probabilities']
+        
+        st.markdown(f"**Sentiment:** {sentiment} {emoji}")
+        st.markdown(f"**Probability (Negative, Neutral, Positive):** {probabilities}")
+        st.markdown(f"<h3 style='color:{color}'>Sentiment Result: {sentiment}</h3>", unsafe_allow_html=True)
