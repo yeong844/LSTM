@@ -56,8 +56,15 @@ def predict_sentiment(model, tokenizer, text):
 
         sentiments = ["Negative", "Neutral", "Positive"]
         emojis = ["😞", "😐", "😊"]
+        colors = ["#FF4B4B", "#FFA500", "#4CAF50"]  # Red, Orange, Green
 
-        return {"sentiment": sentiments[label], "emoji": emojis[label], "confidence": confidence, "probabilities": prediction[0]}
+        return {
+            "sentiment": sentiments[label],
+            "emoji": emojis[label],
+            "confidence": confidence,
+            "probabilities": prediction[0],
+            "color": colors[label]
+        }
 
     except Exception as e:
         st.error(f"Prediction failed: {str(e)}")
@@ -110,36 +117,33 @@ if analyze_button:
         st.error("Cannot analyze: Model or tokenizer could not be loaded.")
     else:
         with st.spinner("Analyzing..."):
-            # The actual prediction
             results = predict_sentiment(model, tokenizer, user_input)
 
-            sentiment = results["sentiment"]
-            emoji = results["emoji"]
-            confidence = results["confidence"]
-            probabilities = results["probabilities"]
+            if results is None:
+                st.error("Failed to generate prediction.")
+            else:
+                sentiment = results["sentiment"]
+                emoji = results["emoji"]
+                confidence = results["confidence"]
+                probabilities = results["probabilities"]
+                color = results["color"]
 
-            # Show main result
-            st.markdown(
-            f"### <span style='color:{color}; font-size: 28px;'>{emoji} {sentiment}</span>",
-            unsafe_allow_html=True
-            )
+                # Show main result
+                st.markdown(
+                    f"### <span style='color:{color}; font-size: 28px;'>{emoji} {sentiment}</span>",
+                    unsafe_allow_html=True
+                )
 
-             # Show correction notice if applicable
-            if corrected:
-            st.warning("⚠️ Prediction was adjusted based on sentiment keywords in text.")
-            st.write("The model prediction appeared to contradict clear sentiment indicators in your text.")
+                # Show confidence bar
+                st.progress(int(confidence * 100))
+                st.caption(f"Confidence: {confidence:.1%}")
 
-            # Show confidence bar
-            st.progress(int(confidence * 100))
-            st.caption(f"Confidence: {confidence:.1%}")
-
-
-            # Show detailed breakdown
-            st.subheader("Sentiment Breakdown")
-            cols = st.columns(3)
-            cols[0].metric("Negative", f"{probabilities[0]:.1%}")
-            cols[1].metric("Neutral", f"{probabilities[1]:.1%}")
-            cols[2].metric("Positive", f"{probabilities[2]:.1%}")
+                # Show detailed breakdown
+                st.subheader("Sentiment Breakdown")
+                cols = st.columns(3)
+                cols[0].metric("Negative", f"{probabilities[0]:.1%}")
+                cols[1].metric("Neutral", f"{probabilities[1]:.1%}")
+                cols[2].metric("Positive", f"{probabilities[2]:.1%}")
 
 # ======================
 # SIDEBAR INFORMATION
