@@ -6,18 +6,6 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 # ======================
-# STREAMLIT PAGE SETUP
-# ======================
-try:
-    st.set_page_config(
-        page_title="Coffee Review Sentiment (LSTM)",
-        layout="centered",
-        initial_sidebar_state="expanded"
-    )
-except Exception as e:
-    st.error(f"Page configuration error: {e}")
-
-# ======================
 # CONSTANTS
 # ======================
 MAX_LEN = 100
@@ -27,12 +15,12 @@ VOCAB_SIZE = 10000
 # CLEANING FUNCTION
 # ======================
 def clean_text(text):
-    text = text.lower()
-    text = re.sub(r"[^\w\s]", "", text)  # Remove punctuation and special characters
+    text = text.lower()  # Convert text to lowercase
+    text = re.sub(r"[^\w\s]", "", text)  # Remove punctuation
     return text
 
 # ======================
-# LOAD MODEL & TOKENIZER (No Caching)
+# LOAD MODEL AND TOKENIZER
 # ======================
 def load_model_and_tokenizer():
     try:
@@ -48,17 +36,28 @@ def load_model_and_tokenizer():
 # ======================
 def predict_sentiment(model, tokenizer, review):
     try:
-        review = clean_text(review)  # Ensure same preprocessing
+        # Clean the review text
+        review = clean_text(review)
+
+        # Convert the review text to sequence of integers
         sequence = tokenizer.texts_to_sequences([review])
         padded = pad_sequences(sequence, maxlen=MAX_LEN, padding='post')
+
+        # Predict sentiment
         prediction = model.predict(padded, verbose=0)
+        
+        # Get the predicted class
         label = np.argmax(prediction)
+        
+        # Map label to sentiment
         sentiment_map = {
             0: ("Negative", "😠", "red"),
             1: ("Neutral", "😐", "blue"),
             2: ("Positive", "😊", "green")
         }
+
         sentiment, emoji, color = sentiment_map[label]
+        
         return {
             "sentiment": sentiment,
             "emoji": emoji,
@@ -68,6 +67,18 @@ def predict_sentiment(model, tokenizer, review):
     except Exception as e:
         st.error(f"Prediction error: {e}")
         return None
+
+# ======================
+# STREAMLIT PAGE SETUP
+# ======================
+try:
+    st.set_page_config(
+        page_title="Coffee Review Sentiment (LSTM)",
+        layout="centered",
+        initial_sidebar_state="expanded"
+    )
+except Exception as e:
+    st.error(f"Page configuration error: {e}")
 
 # ======================
 # MAIN INTERFACE
