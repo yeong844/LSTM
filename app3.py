@@ -4,41 +4,105 @@ import joblib
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-# Title
-st.title("☕ Coffee Review Sentiment Classifier (LSTM)")
+# ======================
+# STREAMLIT PAGE SETUP
+# ======================
+try:
+    st.set_page_config(
+        page_title="Coffee Review Sentiment (LSTM)",
+        layout="centered",
+        initial_sidebar_state="expanded"
+    )
+except Exception as e:
+    st.error(f"Page configuration error: {e}")
 
-# Header
-st.header("1. Enter Coffee Review")
-user_input = st.text_area("Type your coffee review here", "")
-
-# Constants
+# ======================
+# CONSTANTS
+# ======================
 MAX_LEN = 100
 VOCAB_SIZE = 10000
 
-# Load pre-trained model and tokenizer
+# ======================
+# LOAD MODEL & TOKENIZER
+# ======================
 @st.cache_resource
 def load_model_and_tokenizer():
-    model = load_model("sentiment_lstm_model.keras")
-    tokenizer = joblib.load("tokenizer.pkl")
-    return model, tokenizer
+    try:
+        model = load_model("sentiment_lstm_model.keras")
+        tokenizer = joblib.load("tokenizer.pkl")
+        return model, tokenizer
+    except Exception as e:
+        st.error(f"Failed to load model or tokenizer: {e}")
+        return None, None
 
 model, tokenizer = load_model_and_tokenizer()
 
-# Predict function
+# ======================
+# PREDICTION FUNCTION
+# ======================
 def predict_sentiment(review):
-    sequence = tokenizer.texts_to_sequences([review])
-    padded = pad_sequences(sequence, maxlen=MAX_LEN, padding='post')
-    prediction = model.predict(padded)
-    label = np.argmax(prediction)
-    sentiment_map = {0: "😠 Negative", 1: "😐 Neutral", 2: "😊 Positive"}
-    return sentiment_map[label], prediction
+    try:
+        sequence = tokenizer.texts_to_sequences([review])
+        padded = pad_sequences(sequence, maxlen=MAX_LEN, padding='post')
+        prediction = model.predict(padded, verbose=0)
+        label = np.argmax(prediction)
+        sentiment_map = {
+            0: ("Negative", "😠", "red"),
+            1: ("Neutral", "😐", "blue"),
+            2: ("Positive", "😊", "green")
+        }
+        sentiment, emoji, color = sentiment_map[label]
+        return {
+            "sentiment": sentiment,
+            "emoji": emoji,
+            "color": color,
+            "probabilities": prediction[0]
+        }
+    except Exception as e:
+        st.error(f"Prediction error: {e}")
+        return None
 
-# Button
-if st.button("Analyze Sentiment"):
-    if user_input.strip() == "":
-        st.warning("Please enter a review first.")
+# ======================
+# MAIN INTERFACE
+# ======================
+st.title("☕ Coffee Review Sentiment Classifier (LSTM)")
+st.write("Analyze the sentiment of a coffee review using a pre-trained LSTM model.")
+
+st.header("Enter a Coffee Review")
+user_input = st.text_area("Review Text:", height=150)
+
+if st.button("Analyze Sentiment", type="primary"):
+    if not user_input.strip():
+        st.warning("⚠️ Please enter a review first.")
     else:
-        sentiment, probs = predict_sentiment(user_input)
-        st.subheader("Sentiment:")
-        st.success(sentiment)
-        st.write("Prediction Probabilities:", probs)
+        with st.spinner("Analyzing..."):
+            results = predict_sentiment(user_input)
+
+            if results:
+                sentiment = results["sentiment"]
+                emoji = results["emoji"]
+                color = results["color"]
+                probabilities = results["probabilities"]
+
+                st.markdown(
+                    f"### <span style='color:{color}'>{emoji} {sentiment}</span>",
+                    unsafe_allow_html=True
+                )
+
+                st.progress(int(np.max(probabilities) * 100))
+                st.caption(f"Confidence: {np.max(probabilities):.1%}")
+
+                with st.expander("Detailed Prediction"):
+                    cols = st.columns(3)
+                    cols[0].metric("Positive", f"{probabilities[2]:.1%}")
+                    cols[1].metric("Neutral", f"{probabilities[1]:.1%}")
+                    cols[2].metric("Negative", f"{probabilities[0]:.1%}")
+
+# ======================
+# SIDEBAR NOTICE
+# ======================
+st.sidebar.warning("""
+⚠️ **Security Warning**  
+This app loads models and tokenizers from files that may execute arbitrary code.  
+Only use trusted model/tokenizer files.
+""")
