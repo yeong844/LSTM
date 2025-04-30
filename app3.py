@@ -54,7 +54,38 @@ def predict_sentiment(model, tokenizer, review):
     # Make prediction
     prediction = model.predict(padded, verbose=0)
     
-    # Get the predicted class
+    # IMPORTANT FIX: Check for keywords indicating negative sentiment
+    # This is a temporary solution until the model is retrained
+    negative_keywords = ['terrible', 'awful', 'bad', 'worst', 'horrible', 'disgusting', 
+                        'bitter', 'burnt', 'hate', 'nasty', 'undrinkable', 'disappointed']
+    
+    positive_keywords = ['excellent', 'amazing', 'love', 'delicious', 'great', 'best', 
+                         'fantastic', 'wonderful', 'perfect', 'awesome', 'superb', 'outstanding']
+    
+    # Check for presence of sentiment keywords
+    has_negative = any(word in cleaned_review for word in negative_keywords)
+    has_positive = any(word in cleaned_review for word in positive_keywords)
+    
+    # Override probabilities if clear keywords are present and prediction contradicts
+    original_prediction = prediction[0].copy()
+    original_class = np.argmax(original_prediction)
+    corrected = False
+    
+    # If clear negative keywords but predicted positive
+    if has_negative and not has_positive and original_class == 2:
+        # Swap probabilities (negative and positive)
+        prediction[0][0] = original_prediction[2]  # Set negative to what was positive
+        prediction[0][2] = original_prediction[0]  # Set positive to what was negative
+        corrected = True
+    
+    # If clear positive keywords but predicted negative
+    elif has_positive and not has_negative and original_class == 0:
+        # Swap probabilities (negative and positive)
+        prediction[0][0] = original_prediction[2]  # Set negative to what was positive
+        prediction[0][2] = original_prediction[0]  # Set positive to what was negative
+        corrected = True
+    
+    # Get the predicted class after possible correction
     label = np.argmax(prediction[0])
     
     # Map the prediction to sentiment
@@ -71,7 +102,9 @@ def predict_sentiment(model, tokenizer, review):
         "emoji": emoji,
         "color": color,
         "probabilities": prediction[0],
-        "confidence": float(np.max(prediction[0]))
+        "confidence": float(np.max(prediction[0])),
+        "corrected": corrected,
+        "original_prediction": original_prediction if corrected else None
     }
 
 # ======================
@@ -149,12 +182,18 @@ if analyze_button:
             color = results["color"]
             probabilities = results["probabilities"]
             confidence = results["confidence"]
+            corrected = results["corrected"]
             
             # Show main result
             st.markdown(
                 f"### <span style='color:{color}; font-size: 28px;'>{emoji} {sentiment}</span>",
                 unsafe_allow_html=True
             )
+            
+            # Show correction notice if applicable
+            if corrected:
+                st.warning("⚠️ Prediction was adjusted based on sentiment keywords in text.")
+                st.write("The model prediction appeared to contradict clear sentiment indicators in your text.")
             
             # Show confidence bar
             st.progress(confidence)
@@ -166,6 +205,16 @@ if analyze_button:
             cols[0].metric("Negative", f"{probabilities[0]:.1%}")
             cols[1].metric("Neutral", f"{probabilities[1]:.1%}")
             cols[2].metric("Positive", f"{probabilities[2]:.1%}")
+            
+            # If corrected, show original prediction
+            if corrected and results["original_prediction"] is not None:
+                with st.expander("Original Model Prediction"):
+                    orig_pred = results["original_prediction"]
+                    st.write("This was the model's original prediction before adjustment:")
+                    orig_cols = st.columns(3)
+                    orig_cols[0].metric("Negative", f"{orig_pred[0]:.1%}")
+                    orig_cols[1].metric("Neutral", f"{orig_pred[1]:.1%}")
+                    orig_cols[2].metric("Positive", f"{orig_pred[2]:.1%}")
             
             # Show the processed text
             with st.expander("Preprocessing Details"):
@@ -194,21 +243,18 @@ st.sidebar.markdown("""
 - **Target**: Sentiment classification (3 classes)
 """)
 
+st.sidebar.subheader("📢 Important Notice")
+st.sidebar.warning("""
+**The model is currently being improved for better accuracy.**
+
+This version includes a temporary fix to correctly identify obvious negative 
+or positive sentiment based on keywords. A fully retrained model will be 
+released soon.
+""")
+
 st.sidebar.subheader("Tips for Better Results")
 st.sidebar.markdown("""
 1. **Be descriptive** - Include details about flavor, aroma, etc.
 2. **Use coffee terminology** - Words like "acidic," "bitter," or "smooth"
 3. **Be clear** - Avoid ambiguous language
 """)
-
-st.sidebar.subheader("Troubleshooting")
-if model is not None and tokenizer is not None:
-    st.sidebar.success("Model and tokenizer loaded successfully")
-else:
-    st.sidebar.error("Model or tokenizer could not be loaded")
-    st.sidebar.markdown("""
-    If you're encountering issues:
-    1. Check that model files are in the same directory as this app
-    2. Restart the application
-    3. Try reinstalling the model files
-    """)
