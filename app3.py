@@ -125,8 +125,8 @@ if analyze_button:
             )
 
             # Show confidence bar
-            st.progress(confidence)
-            st.caption(f"Confidence: {confidence:.1%}")
+           st.progress(int(confidence * 100))
+           st.caption(f"Confidence: {confidence:.1%}")
 
             # Show detailed breakdown
             st.subheader("Sentiment Breakdown")
