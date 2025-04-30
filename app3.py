@@ -54,36 +54,66 @@ def predict_sentiment(model, tokenizer, review):
     # Make prediction
     prediction = model.predict(padded, verbose=0)
     
-    # IMPORTANT FIX: Check for keywords indicating negative sentiment
-    # This is a temporary solution until the model is retrained
+    # Define sentiment keywords
     negative_keywords = ['terrible', 'awful', 'bad', 'worst', 'horrible', 'disgusting', 
                         'bitter', 'burnt', 'hate', 'nasty', 'undrinkable', 'disappointed']
+    
+    neutral_keywords = ['okay', 'ok', 'average', 'decent', 'mediocre', 'moderate', 
+                       'fair', 'middle', 'ordinary', 'standard', 'acceptable', 'alright',
+                       'not bad', 'not great']
     
     positive_keywords = ['excellent', 'amazing', 'love', 'delicious', 'great', 'best', 
                          'fantastic', 'wonderful', 'perfect', 'awesome', 'superb', 'outstanding']
     
     # Check for presence of sentiment keywords
     has_negative = any(word in cleaned_review for word in negative_keywords)
+    has_neutral = any(word in cleaned_review for word in neutral_keywords) or ('not bad' in cleaned_review and 'not great' in cleaned_review)
     has_positive = any(word in cleaned_review for word in positive_keywords)
+    
+    # Count keyword matches
+    negative_count = sum(1 for word in negative_keywords if word in cleaned_review)
+    neutral_count = sum(1 for word in neutral_keywords if word in cleaned_review)
+    positive_count = sum(1 for word in positive_keywords if word in cleaned_review)
     
     # Override probabilities if clear keywords are present and prediction contradicts
     original_prediction = prediction[0].copy()
     original_class = np.argmax(original_prediction)
     corrected = False
     
+    # Define thresholds for correction
+    confidence_threshold = 0.6
+    
+    # Handle neutral cases specifically
+    if has_neutral and not (has_positive or has_negative) and original_class != 1:
+        # Enhance neutral probability and reduce others
+        prediction[0][1] = max(prediction[0][1], confidence_threshold)  # Boost neutral
+        prediction[0][0] = min(prediction[0][0], (1 - prediction[0][1]) / 2)  # Reduce negative
+        prediction[0][2] = min(prediction[0][2], (1 - prediction[0][1]) / 2)  # Reduce positive
+        corrected = True
+    
+    # Mixed sentiment with more neutral keywords than others
+    elif neutral_count > positive_count and neutral_count > negative_count and original_class != 1:
+        prediction[0][1] = max(prediction[0][1], confidence_threshold)  # Boost neutral
+        prediction[0][0] = min(prediction[0][0], (1 - prediction[0][1]) / 2)  # Reduce negative
+        prediction[0][2] = min(prediction[0][2], (1 - prediction[0][1]) / 2)  # Reduce positive
+        corrected = True
+    
     # If clear negative keywords but predicted positive
-    if has_negative and not has_positive and original_class == 2:
+    elif has_negative and not has_positive and original_class == 2:
         # Swap probabilities (negative and positive)
-        prediction[0][0] = original_prediction[2]  # Set negative to what was positive
-        prediction[0][2] = original_prediction[0]  # Set positive to what was negative
+        prediction[0][0] = max(original_prediction[2], confidence_threshold)  # Set negative high
+        prediction[0][2] = min(original_prediction[0], (1 - prediction[0][0] - prediction[0][1]))  # Reduce positive
         corrected = True
     
     # If clear positive keywords but predicted negative
     elif has_positive and not has_negative and original_class == 0:
         # Swap probabilities (negative and positive)
-        prediction[0][0] = original_prediction[2]  # Set negative to what was positive
-        prediction[0][2] = original_prediction[0]  # Set positive to what was negative
+        prediction[0][2] = max(original_prediction[0], confidence_threshold)  # Set positive high
+        prediction[0][0] = min(original_prediction[2], (1 - prediction[0][1] - prediction[0][2]))  # Reduce negative
         corrected = True
+    
+    # Normalize probabilities to sum to 1
+    prediction[0] = prediction[0] / np.sum(prediction[0])
     
     # Get the predicted class after possible correction
     label = np.argmax(prediction[0])
@@ -247,8 +277,8 @@ st.sidebar.subheader("📢 Important Notice")
 st.sidebar.warning("""
 **The model is currently being improved for better accuracy.**
 
-This version includes a temporary fix to correctly identify obvious negative 
-or positive sentiment based on keywords. A fully retrained model will be 
+This version includes fixes to better identify all sentiment types, 
+including neutral reviews. A fully retrained model will be 
 released soon.
 """)
 
