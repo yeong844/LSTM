@@ -120,13 +120,19 @@ if analyze_button:
 
             # Show main result
             st.markdown(
-                f"### <span style='color:{'green' if sentiment == 'Positive' else 'blue' if sentiment == 'Neutral' else 'red'};'>{emoji} {sentiment}</span>",
-                unsafe_allow_html=True
+            f"### <span style='color:{color}; font-size: 28px;'>{emoji} {sentiment}</span>",
+            unsafe_allow_html=True
             )
 
+             # Show correction notice if applicable
+            if corrected:
+            st.warning("⚠️ Prediction was adjusted based on sentiment keywords in text.")
+            st.write("The model prediction appeared to contradict clear sentiment indicators in your text.")
+
             # Show confidence bar
-           st.progress(int(confidence * 100))
-           st.caption(f"Confidence: {confidence:.1%}")
+            st.progress(int(confidence * 100))
+            st.caption(f"Confidence: {confidence:.1%}")
+
 
             # Show detailed breakdown
             st.subheader("Sentiment Breakdown")
