@@ -7,6 +7,9 @@ import joblib
 import tensorflow as tf
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
+# ✅ MUST be the first Streamlit command
+st.set_page_config(page_title="Coffee Review Sentiment", layout="centered")
+
 # Load the trained LSTM model and tokenizer
 @st.cache_resource
 def load_model_and_tokenizer():
@@ -37,7 +40,6 @@ def predict_sentiment(text):
     return labels[predicted_class], round(confidence, 2)
 
 # Streamlit UI
-st.set_page_config(page_title="Coffee Review Sentiment", layout="centered")
 st.title("☕ Coffee Review Sentiment Analyzer")
 
 st.markdown("""
