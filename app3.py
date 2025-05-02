@@ -20,6 +20,7 @@ st.set_page_config(
 # CONSTANTS
 # ======================
 MAX_LEN = 100
+LABELS = ["Negative", "Neutral", "Positive"]
 
 # ======================
 # MODEL & TOKENIZER LOADING
@@ -31,129 +32,64 @@ def load_model_and_tokenizer():
         tokenizer = joblib.load("tokenizer.pkl")
         return model, tokenizer
     except Exception as e:
-        st.error(f"Failed to load model or tokenizer: {e}")
+        st.error(f"❌ Failed to load model or tokenizer: {e}")
         return None, None
 
 # ======================
-# PREDICTION FUNCTION (Simplified)
+# TEXT CLEANING FUNCTION
 # ======================
 def clean_text(text):
     text = text.lower()
-    text = re.sub(r'[^\w\s]', '', text)
+    text = re.sub(r"[^\w\s]", "", text)
     return text
 
+# ======================
+# PREDICTION FUNCTION
+# ======================
 def predict_sentiment(model, tokenizer, review):
-    cleaned_review = clean_text(review)
-    sequence = tokenizer.texts_to_sequences([cleaned_review])
-    padded = pad_sequences(sequence, maxlen=MAX_LEN, padding='post', truncating='post')
+    cleaned = clean_text(review)
+    sequence = tokenizer.texts_to_sequences([cleaned])
+    padded = pad_sequences(sequence, maxlen=MAX_LEN, padding="post", truncating="post")
     prediction = model.predict(padded, verbose=0)[0]
     label = np.argmax(prediction)
-
     sentiment_map = {
         0: ("Negative", "😠", "red"),
         1: ("Neutral", "😐", "blue"),
         2: ("Positive", "😊", "green")
     }
-
     sentiment, emoji, color = sentiment_map[label]
-
     return {
         "sentiment": sentiment,
         "emoji": emoji,
         "color": color,
         "probabilities": prediction,
-        "confidence": float(np.max(prediction)),
-        "corrected": False,
-        "original_prediction": None
+        "confidence": float(np.max(prediction))
     }
 
 # ======================
 # MAIN INTERFACE
 # ======================
-st.title("Sentiment Analyzer(LSTM)")
-st.write("Analyze the sentiment of any text review using a Bidirectional LSTM model.")
+st.title("📊 Sentiment Analyzer (LSTM)")
+st.markdown("Enter a product review below and let the model analyze its **sentiment**.")
 
-file_status = st.empty()
-model_exists = os.path.exists("sentiment_lstm_model.keras")
-tokenizer_exists = os.path.exists("tokenizer.pkl")
+model, tokenizer = load_model_and_tokenizer()
 
-if not model_exists or not tokenizer_exists:
-    file_status.error("⚠️ Model or tokenizer file missing!")
-    missing_files = []
-    if not model_exists:
-        missing_files.append("sentiment_lstm_model.keras")
-    if not tokenizer_exists:
-        missing_files.append("tokenizer.pkl")
+if model is not None and tokenizer is not None:
+    user_input = st.text_area("✍️ Enter your review here:", height=150)
     
-    st.info(f"""
-    Please ensure these files are in the app directory:
-    - {', '.join(missing_files)}
-    """)
-else:
-    file_status.success("✅ Model and tokenizer files found")
-    model, tokenizer = load_model_and_tokenizer()
-
-# Input section
-st.header("Sentiment Analyzer(LSTM)")
-user_input = st.text_area(
-    "Review Text:",
-    height=150,
-    value="",
-    placeholder="Example: The product quality was great and delivery was fast!"
-)
-
-analyze_button = st.button("Analyze Sentiment", type="primary")
-
-if analyze_button:
-    if not user_input.strip():
-        st.warning("⚠️ Please enter a review first.")
-    elif model is None or tokenizer is None:
-        st.error("Cannot analyze: Model or tokenizer could not be loaded.")
-    else:
-        with st.spinner("Analyzing..."):
-            results = predict_sentiment(model, tokenizer, user_input)
-
-            sentiment = results["sentiment"]
-            emoji = results["emoji"]
-            color = results["color"]
-            probabilities = results["probabilities"]
-            confidence = results["confidence"]
-
+    if st.button("Analyze"):
+        if user_input.strip() == "":
+            st.warning("⚠️ Please enter a review before analyzing.")
+        else:
+            result = predict_sentiment(model, tokenizer, user_input)
             st.markdown(
-                f"### <span style='color:{color}; font-size: 28px;'>{emoji} {sentiment}</span>",
-                unsafe_allow_html=True
+                f"<h3 style='color:{result['color']}'>Prediction: {result['sentiment']} {result['emoji']} "
+                f"({result['confidence']*100:.2f}% confidence)</h3>", unsafe_allow_html=True
             )
-
-            st.progress(confidence)
-            st.caption(f"Confidence: {confidence:.1%}")
-
-            st.subheader("Sentiment Breakdown")
-            cols = st.columns(3)
-            cols[0].metric("Negative", f"{probabilities[0]:.1%}")
-            cols[1].metric("Neutral", f"{probabilities[1]:.1%}")
-            cols[2].metric("Positive", f"{probabilities[2]:.1%}")
-
-            with st.expander("Preprocessing Details"):
-                st.write("**Original Text:**")
-                st.write(user_input)
-                st.write("**Processed Text:**")
-                st.write(clean_text(user_input))
-
-# ======================
-# SIDEBAR INFORMATION
-# ======================
-st.sidebar.title("About")
-st.sidebar.info("""
-This app uses a Bidirectional LSTM model trained to classify sentiment for any text input.
-Sentiment Categories:
-- 😠 Negative
-- 😐 Neutral
-- 😊 Positive
-""")
-
-st.sidebar.subheader("Tips for Better Results")
-st.sidebar.markdown("""
-1. Use complete sentences.
-2. Mention what you liked or disliked.
-3. Avoid vague language.
-""")
+            st.markdown("**Probability Distribution:**")
+            for i, label in enumerate(LABELS):
+                st.progress(float(result["probabilities"][i]), text=f"{label}: {result['probabilities'][i]*100:.2f}%")
+else:
+    st.error("Model and tokenizer are required to run this app. Please make sure the following files exist in the directory:")
+    st.code("sentiment_lstm_model.keras")
+    st.code("tokenizer.pkl")
