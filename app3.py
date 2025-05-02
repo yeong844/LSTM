@@ -1,143 +1,55 @@
+# app3.py
+
 import streamlit as st
+import re
 import numpy as np
-import pandas as pd
-import pickle
-from tensorflow.keras.models import load_model
+import joblib
+import tensorflow as tf
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-import os
 
-# ======================
-# STREAMLIT INITIALIZATION
-# ======================
-try:
-    st.set_page_config(
-        page_title="Sentiment Analysis (LSTM)",
-        layout="centered",
-        initial_sidebar_state="expanded"
-    )
-except Exception as e:
-    st.error(f"Initialization error: {e}")
-
-# ======================
-# MODEL & TOKENIZER LOADING
-# ======================
+# Load the trained LSTM model and tokenizer
 @st.cache_resource
 def load_model_and_tokenizer():
-    try:
-        if not os.path.exists("sentiment_lstm_model.keras") or not os.path.exists("tokenizer.pkl"):
-            raise FileNotFoundError("Model or Tokenizer not found. Please upload the required files.")
-        
-        model = load_model("sentiment_lstm_model.keras")
+    model = tf.keras.models.load_model("sentiment_lstm_model.keras")
+    tokenizer = joblib.load("tokenizer.pkl")
+    return model, tokenizer
 
-        with open('tokenizer.pkl', 'rb') as f:
-            tokenizer = pickle.load(f)
+model, tokenizer = load_model_and_tokenizer()
 
-        return model, tokenizer
-    except Exception as e:
-        st.error(f"Loading model/tokenizer failed: {str(e)}")
-        return None, None
+# Text preprocessing function
+def preprocess_text(text):
+    text = text.lower()
+    text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
+    return text
 
-# ======================
-# PREDICTION FUNCTION
-# ======================
-max_len = 100  # same as training
+# Prediction function
+def predict_sentiment(text):
+    text = preprocess_text(text)
+    sequence = tokenizer.texts_to_sequences([text])
+    padded = pad_sequences(sequence, maxlen=100, padding='post', truncating='post')
+    
+    prediction = model.predict(padded)
+    predicted_class = np.argmax(prediction)
+    
+    labels = {0: "Negative", 1: "Neutral", 2: "Positive"}
+    confidence = prediction[0][predicted_class] * 100
+    
+    return labels[predicted_class], round(confidence, 2)
 
-def predict_sentiment(model, tokenizer, text):
-    try:
-        if not text.strip():
-            return None
-        
-        sequence = tokenizer.texts_to_sequences([text])
-        padded = pad_sequences(sequence, maxlen=max_len)
-        prediction = model.predict(padded, verbose=0)
-        
-        label = np.argmax(prediction, axis=1)[0]
-        confidence = np.max(prediction)
+# Streamlit UI
+st.set_page_config(page_title="Coffee Review Sentiment", layout="centered")
+st.title("☕ Coffee Review Sentiment Analyzer")
 
-        sentiments = ["Negative", "Neutral", "Positive"]
-        emojis = ["😞", "😐", "😊"]
-
-        return {
-            "sentiment": sentiments[label],
-            "emoji": emojis[label],
-            "confidence": confidence,
-            "probabilities": prediction[0]
-        }
-
-    except Exception as e:
-        st.error(f"Prediction failed: {str(e)}")
-        return None
-
-# ======================
-# MAIN APP INTERFACE
-# ======================
-st.title("Review Sentiment Analysis (LSTM)")
-st.write("Enter your review below:")
-
-user_input = st.text_area("Review Text:", height=150)
-
-if st.button("Analyze Sentiment", type="primary"):
-    if not user_input.strip():
-        st.warning("⚠️ Please enter a review first.")
-    else:
-        with st.spinner("Processing..."):
-            model, tokenizer = load_model_and_tokenizer()
-
-            if model is not None and tokenizer is not None:
-                results = predict_sentiment(model, tokenizer, user_input)
-
-                if results:
-                    sentiment = results["sentiment"]
-                    emoji = results["emoji"]
-                    confidence = results["confidence"]
-                    probabilities = results["probabilities"]
-
-                    # Color Mapping
-                    color_map = {
-                        "Positive": "green",
-                        "Neutral": "blue",
-                        "Negative": "red"
-                    }
-                    color = color_map.get(sentiment, "gray")
-
-                    st.markdown(
-                        f"### <span style='color:{color}'>{emoji} {sentiment}</span>",
-                        unsafe_allow_html=True
-                    )
-
-                    st.progress(int(confidence * 100))
-                    st.caption(f"Confidence: {confidence:.1%}")
-
-                    with st.expander("Detailed Analysis"):
-                        cols = st.columns(3)
-                        cols[0].metric("Positive", f"{probabilities[2]:.1%}")
-                        cols[1].metric("Neutral", f"{probabilities[1]:.1%}")
-                        cols[2].metric("Negative", f"{probabilities[0]:.1%}")
-
-# ======================
-# TROUBLESHOOTING SECTION
-# ======================
-with st.expander("⚠️ Troubleshooting Help"):
-    st.markdown("""  
-    **Common Issues & Solutions:**
-
-    1. **Model or Tokenizer not found**:
-       - Ensure `sentiment_lstm_model.keras` and `tokenizer.pkl` are in the app folder.
-       - Refresh the page after uploading.
-
-    2. **Strange predictions**:
-       - Input longer and more explicit reviews for better results.
-
-    3. **App crashes**:
-       - Restart the Streamlit server.
-       - Check console logs for detailed errors.
-    """)
-
-# ======================
-# SECURITY WARNING
-# ======================
-st.sidebar.warning("""
-⚠️ **Security Notice**  
-This app loads models and tokenizers from pickle/keras files which can execute arbitrary code.  
-Only use models from trusted sources.
+st.markdown("""
+Type or paste a coffee review below and click **Predict** to see the sentiment.
 """)
+
+user_input = st.text_area("✍️ Enter a coffee review:", height=150)
+
+if st.button("🔍 Predict Sentiment"):
+    if user_input.strip():
+        label, confidence = predict_sentiment(user_input)
+        st.success(f"**Prediction:** {label}")
+        st.info(f"**Confidence:** {confidence}%")
+    else:
+        st.warning("Please enter some text for prediction.")
