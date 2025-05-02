@@ -27,7 +27,7 @@ MAX_LEN = 100
 @st.cache_resource
 def load_model_and_tokenizer():
     try:
-        model = load_model("sentiment_lstm_model_fixed.keras", compile=True)
+        model = load_model("sentiment_lstm_model.keras", compile=True)
         tokenizer = joblib.load("tokenizer.pkl")
         return model, tokenizer
     except Exception as e:
