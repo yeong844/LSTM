@@ -3,6 +3,7 @@ import numpy as np
 import joblib
 import re
 import os
+import unicodedata
 import tensorflow as tf
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
@@ -16,9 +17,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ======================
-# CONSTANTS
-# ======================
 MAX_LEN = 100
 
 # ======================
@@ -29,29 +27,38 @@ def load_model_and_tokenizer():
     try:
         model = load_model("LSTM_sentiment_model_fixed.keras", compile=True)
         tokenizer = joblib.load("tokenizer_fixed.pkl")
+
+        st.sidebar.write("Tokenizer OOV token:", tokenizer.oov_token)
+        oov_index = tokenizer.word_index.get(tokenizer.oov_token)
+        st.sidebar.write("OOV token index:", oov_index)
+
         return model, tokenizer
     except Exception as e:
         st.error(f"Failed to load model or tokenizer: {e}")
         return None, None
 
 # ======================
-# PREDICTION FUNCTION
+# CLEANING FUNCTION
 # ======================
 def clean_text(text):
+    text = unicodedata.normalize("NFKC", text)
     text = text.lower()
     text = re.sub(r"n't", " not", text)
     text = re.sub(r'[^\w\s]', '', text)
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
+# ======================
+# PREDICTION FUNCTION
+# ======================
 def predict_sentiment(model, tokenizer, review):
     cleaned_review = clean_text(review)
     sequence = tokenizer.texts_to_sequences([cleaned_review])
     padded = pad_sequences(sequence, maxlen=MAX_LEN, padding='post', truncating='post')
-    
-    prediction = model.predict(padded, verbose=0)[0]
+
+    prediction = model(padded, training=False).numpy()[0]
     label = np.argmax(prediction)
-    
+
     sentiment_map = {
         0: ("Negative", "😠", "red"),
         1: ("Neutral", "😐", "blue"),
@@ -60,7 +67,7 @@ def predict_sentiment(model, tokenizer, review):
 
     sentiment, emoji, color = sentiment_map[label]
     confidence = float(np.max(prediction))
-    
+
     threshold = 0.5
     corrected = False
     original_prediction = None
@@ -78,7 +85,10 @@ def predict_sentiment(model, tokenizer, review):
         "probabilities": prediction,
         "confidence": confidence,
         "corrected": corrected,
-        "original_prediction": original_prediction
+        "original_prediction": original_prediction,
+        "cleaned_review": cleaned_review,
+        "sequence": sequence,
+        "padded": padded
     }
 
 # ======================
@@ -98,13 +108,12 @@ if not model_exists or not tokenizer_exists:
         missing_files.append("LSTM_sentiment_model_fixed.keras")
     if not tokenizer_exists:
         missing_files.append("tokenizer_fixed.pkl")
-    
+
     st.info(f"Please ensure these files are in the app directory:\n- {', '.join(missing_files)}")
 else:
     file_status.success("✅ Model and tokenizer files found")
     model, tokenizer = load_model_and_tokenizer()
 
-# Input section
 st.header("Enter a Review")
 user_input = st.text_area(
     "Review Text:",
@@ -151,7 +160,7 @@ if analyze_button:
 
             st.progress(confidence)
             st.caption(f"Confidence: {confidence:.1%}")
-            
+
             if corrected:
                 original_sentiment = ["Negative", "Neutral", "Positive"][original_prediction]
                 st.info(f"⚠️ Low confidence prediction ({confidence:.1%}). "
@@ -163,27 +172,26 @@ if analyze_button:
             cols[1].metric("Neutral", f"{probabilities[1]:.1%}")
             cols[2].metric("Positive", f"{probabilities[2]:.1%}")
 
-            with st.expander("Preprocessing Details"):
+            with st.expander("Preprocessing & Token Info"):
                 st.write("**Original Text:**")
                 st.write(user_input)
-                st.write("**Processed Text:**")
-                st.write(clean_text(user_input))
-                
-                sequence = tokenizer.texts_to_sequences([clean_text(user_input)])
-                padded = pad_sequences(sequence, maxlen=MAX_LEN, padding='post', truncating='post')
-                
-                st.write("**Tokenized Words:**")
-                words = clean_text(user_input).split()
+                st.write("**Cleaned Text:**")
+                st.write(results["cleaned_review"])
+                st.write("**Sequence:**")
+                st.write(results["sequence"])
+                st.write("**Padded:**")
+                st.write(results["padded"].tolist())
+                st.write("**Token Mapping:**")
+                words = results["cleaned_review"].split()
                 tokens = [tokenizer.word_index.get(word, 0) for word in words]
                 token_dict = {word: (token if token > 0 else "<OOV>") for word, token in zip(words, tokens)}
                 st.write(token_dict)
-                
-                st.write("**Sequence Length:**", len(sequence[0]))
-                if len(sequence[0]) == 0:
+                st.write("**Sequence Length:**", len(results["sequence"][0]))
+                if len(results["sequence"][0]) == 0:
                     st.warning("⚠️ No words were recognized by the tokenizer!")
 
 # ======================
-# SIDEBAR INFORMATION
+# SIDEBAR
 # ======================
 st.sidebar.title("About")
 st.sidebar.info("""
@@ -197,7 +205,7 @@ Sentiment Categories:
 st.sidebar.subheader("Model Details")
 st.sidebar.markdown("""
 - **Model**: Bidirectional LSTM
-- **Tokenizer**: Fitted on coffee reviews
+- **Tokenizer**: Fitted on cleaned coffee reviews
 - **Input**: Any review text
 """)
 
