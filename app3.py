@@ -27,19 +27,21 @@ MAX_LEN = 100
 @st.cache_resource
 def load_model_and_tokenizer():
     try:
-        model = load_model("sentiment_lstm_model.keras", compile=True)
-        tokenizer = joblib.load("tokenizer.pkl")
+        model = load_model("LSTM_sentiment_model_fixed.keras", compile=True)
+        tokenizer = joblib.load("tokenizer_fixed.pkl")
         return model, tokenizer
     except Exception as e:
         st.error(f"Failed to load model or tokenizer: {e}")
         return None, None
 
 # ======================
-# PREDICTION FUNCTION (Improved)
+# PREDICTION FUNCTION
 # ======================
 def clean_text(text):
     text = text.lower()
+    text = re.sub(r"n't", " not", text)
     text = re.sub(r'[^\w\s]', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
     return text
 
 def predict_sentiment(model, tokenizer, review):
@@ -47,10 +49,7 @@ def predict_sentiment(model, tokenizer, review):
     sequence = tokenizer.texts_to_sequences([cleaned_review])
     padded = pad_sequences(sequence, maxlen=MAX_LEN, padding='post', truncating='post')
     
-    # Get raw prediction probabilities
     prediction = model.predict(padded, verbose=0)[0]
-    
-    # Map predictions to sentiment categories (0: Negative, 1: Neutral, 2: Positive)
     label = np.argmax(prediction)
     
     sentiment_map = {
@@ -60,24 +59,18 @@ def predict_sentiment(model, tokenizer, review):
     }
 
     sentiment, emoji, color = sentiment_map[label]
-    
-    # Calculate confidence as the highest probability
     confidence = float(np.max(prediction))
     
-    # Apply threshold correction for more accurate sentiment classification
-    # This helps handle cases where the model might be uncertain
-    threshold = 0.5  # Minimum confidence threshold
-    
+    threshold = 0.5
     corrected = False
     original_prediction = None
-    
-    # If confidence is too low, consider it neutral
-    if confidence < threshold and label != 1:  # If not already neutral
+
+    if confidence < threshold and label != 1:
         original_prediction = label
-        label = 1  # Set to neutral
+        label = 1
         sentiment, emoji, color = sentiment_map[label]
         corrected = True
-    
+
     return {
         "sentiment": sentiment,
         "emoji": emoji,
@@ -95,21 +88,18 @@ st.title("Sentiment Analyzer")
 st.write("Analyze the sentiment of any text review using a Bidirectional LSTM model.")
 
 file_status = st.empty()
-model_exists = os.path.exists("sentiment_lstm_model.keras")
-tokenizer_exists = os.path.exists("tokenizer.pkl")
+model_exists = os.path.exists("LSTM_sentiment_model_fixed.keras")
+tokenizer_exists = os.path.exists("tokenizer_fixed.pkl")
 
 if not model_exists or not tokenizer_exists:
     file_status.error("⚠️ Model or tokenizer file missing!")
     missing_files = []
     if not model_exists:
-        missing_files.append("sentiment_lstm_model.keras")
+        missing_files.append("LSTM_sentiment_model_fixed.keras")
     if not tokenizer_exists:
-        missing_files.append("tokenizer.pkl")
+        missing_files.append("tokenizer_fixed.pkl")
     
-    st.info(f"""
-    Please ensure these files are in the app directory:
-    - {', '.join(missing_files)}
-    """)
+    st.info(f"Please ensure these files are in the app directory:\n- {', '.join(missing_files)}")
 else:
     file_status.success("✅ Model and tokenizer files found")
     model, tokenizer = load_model_and_tokenizer()
@@ -123,7 +113,6 @@ user_input = st.text_area(
     placeholder="Example: The product quality was great and delivery was fast!"
 )
 
-# Add examples for user to try
 examples = [
     "This coffee is amazing with rich flavor and aroma. Absolutely loved it!",
     "The coffee is decent, not great but not bad either.",
@@ -163,11 +152,10 @@ if analyze_button:
             st.progress(confidence)
             st.caption(f"Confidence: {confidence:.1%}")
             
-            # Show correction notice if applicable
             if corrected:
                 original_sentiment = ["Negative", "Neutral", "Positive"][original_prediction]
-                st.info(f"⚠️ Low confidence prediction ({confidence:.1%}). " 
-                        f"Original prediction was {original_sentiment}, but I've classified it as Neutral.")
+                st.info(f"⚠️ Low confidence prediction ({confidence:.1%}). "
+                        f"Original prediction was {original_sentiment}, but reclassified as Neutral.")
 
             st.subheader("Sentiment Breakdown")
             cols = st.columns(3)
@@ -181,7 +169,6 @@ if analyze_button:
                 st.write("**Processed Text:**")
                 st.write(clean_text(user_input))
                 
-                # Show token information for debugging
                 sequence = tokenizer.texts_to_sequences([clean_text(user_input)])
                 padded = pad_sequences(sequence, maxlen=MAX_LEN, padding='post', truncating='post')
                 
@@ -200,26 +187,23 @@ if analyze_button:
 # ======================
 st.sidebar.title("About")
 st.sidebar.info("""
-This app uses a Bidirectional LSTM model trained to classify sentiment for any text input.
+This app uses a Bidirectional LSTM model trained on coffee reviews.
 Sentiment Categories:
-- 😠 Negative (Star rating ≤ 2)
-- 😐 Neutral (Star rating = 3)
-- 😊 Positive (Star rating ≥ 4)
+- 😠 Negative (Stars ≤ 2)
+- 😐 Neutral (Stars = 3)
+- 😊 Positive (Stars ≥ 4)
 """)
 
 st.sidebar.subheader("Model Details")
 st.sidebar.markdown("""
 - **Model**: Bidirectional LSTM
-- **Tokenizer**: Trained on coffee reviews dataset
-- **Input**: Any review or feedback text
-- **Accuracy**: Classification is based on probabilities for each sentiment class
+- **Tokenizer**: Fitted on coffee reviews
+- **Input**: Any review text
 """)
 
-st.sidebar.subheader("Tips for Better Results")
+st.sidebar.subheader("Tips")
 st.sidebar.markdown("""
-1. Use complete sentences with proper context.
-2. Mention specific aspects (flavor, quality, service, etc.).
-3. Be clear about what you liked or disliked.
-4. Use descriptive language (e.g., "rich", "bitter", "smooth").
-5. Longer, more detailed reviews tend to give better results.
+- Write full sentences
+- Include specific descriptors (taste, aroma, quality)
+- Longer, more descriptive input improves accuracy
 """)
