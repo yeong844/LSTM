@@ -70,7 +70,7 @@ def predict_sentiment(model, tokenizer, review):
 # ======================
 # MAIN INTERFACE
 # ======================
-st.title("Sentiment Analyzer")
+st.title("Sentiment Analyzer(LSTM)")
 st.write("Analyze the sentiment of any text review using a Bidirectional LSTM model.")
 
 file_status = st.empty()
@@ -94,7 +94,7 @@ else:
     model, tokenizer = load_model_and_tokenizer()
 
 # Input section
-st.header("Enter a Review")
+st.header("Sentiment Analyzer(LSTM)")
 user_input = st.text_area(
     "Review Text:",
     height=150,
