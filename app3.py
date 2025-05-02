@@ -2,6 +2,8 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import pickle
+import re
+import string
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 import os
@@ -38,6 +40,24 @@ def load_model_and_tokenizer():
         return None, None
 
 # ======================
+# TEXT CLEANING FUNCTION (Improves Accuracy)
+# ======================
+def clean_text(text):
+    # Lowercase
+    text = text.lower()
+    # Remove URLs
+    text = re.sub(r"http\S+|www\S+|https\S+", '', text, flags=re.MULTILINE)
+    # Remove mentions, hashtags, etc.
+    text = re.sub(r'\@\w+|\#', '', text)
+    # Remove punctuation
+    text = text.translate(str.maketrans('', '', string.punctuation))
+    # Remove numbers and special chars
+    text = re.sub(r'[^a-z\s]', '', text)
+    # Remove extra whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+# ======================
 # PREDICTION FUNCTION
 # ======================
 max_len = 100  # same as training
@@ -46,11 +66,12 @@ def predict_sentiment(model, tokenizer, text):
     try:
         if not text.strip():
             return None
-        
-        sequence = tokenizer.texts_to_sequences([text])
+
+        cleaned = clean_text(text)
+        sequence = tokenizer.texts_to_sequences([cleaned])
         padded = pad_sequences(sequence, maxlen=max_len)
+
         prediction = model.predict(padded, verbose=0)
-        
         label = np.argmax(prediction, axis=1)[0]
         confidence = np.max(prediction)
 
