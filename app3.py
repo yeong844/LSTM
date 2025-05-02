@@ -41,7 +41,6 @@ def load_model_and_tokenizer():
 # TEXT PREPROCESSING FUNCTION
 # ======================
 def preprocess_text(text):
-    """Text cleaning for both app and model training"""
     if not isinstance(text, str):
         return ""
     text = unicodedata.normalize("NFKC", text)
@@ -55,21 +54,15 @@ def preprocess_text(text):
 # PREDICTION FUNCTION
 # ======================
 def predict_sentiment(model, tokenizer, review):
-    """Make sentiment prediction, adjust confidence thresholds, and handle OOV tokens properly"""
-    # Preprocess the review text
     cleaned_review = preprocess_text(review)
-    # Tokenize and pad the review
     sequence = tokenizer.texts_to_sequences([cleaned_review])
-    
+
     if len(sequence[0]) == 0:
         return {"sentiment": "Neutral", "confidence": 1.0, "probabilities": {"Negative": 0.0, "Neutral": 1.0, "Positive": 0.0}}
 
     padded = pad_sequences(sequence, maxlen=MAX_LEN, padding='post', truncating='post')
-
-    # Predict sentiment probabilities
     prediction = model(padded, training=False).numpy()[0]
 
-    # Get the sentiment label with highest probability
     label = np.argmax(prediction)
 
     sentiment_map = {
@@ -81,15 +74,14 @@ def predict_sentiment(model, tokenizer, review):
     sentiment, emoji, color = sentiment_map[label]
     confidence = float(np.max(prediction))
 
-    # Adjust predictions if confidence is too low (below threshold)
-    threshold = 0.6  # You can adjust this threshold based on your testing
+    # Adjust predictions if confidence is too low
+    threshold = 0.45
     corrected = False
     original_prediction = None
 
     if confidence < threshold:
-        # If confidence is low, set to neutral instead of any other label
         original_prediction = label
-        label = 1  # Default to Neutral
+        label = 1  # Neutral
         sentiment, emoji, color = sentiment_map[label]
         corrected = True
 
