@@ -96,9 +96,9 @@ if not model_exists or not tokenizer_exists:
     file_status.error("⚠️ Model or tokenizer file missing!")
     missing_files = []
     if not model_exists:
-        missing_files.append("LSTM_sentiment_model_fixed.keras")
+        missing_files.append("sentiment_lstm_model.keras")
     if not tokenizer_exists:
-        missing_files.append("tokenizer_fixed.pkl")
+        missing_files.append("tokenizer.pkl")
     
     st.info(f"Please ensure these files are in the app directory:\n- {', '.join(missing_files)}")
 else:
